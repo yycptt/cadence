@@ -46,8 +46,6 @@ type (
 		GetAllClusterFailoverVersions() map[string]int64
 		// ClusterNameForFailoverVersion return the corresponding cluster name for a given failover version
 		ClusterNameForFailoverVersion(failoverVersion int64) string
-		// GetAllClientAddress return the frontend address for each cluster name
-		GetAllClientAddress() map[string]string
 	}
 
 	metadataImpl struct {
@@ -65,16 +63,12 @@ type (
 		clusterInitialFailoverVersions map[string]int64
 		// clusterInitialFailoverVersions contains all initial failover version -> corresponding cluster name
 		initialFailoverVersionClusters map[int64]string
-		// clusterToAddress contains the cluster name to corresponding frontend client
-		clusterToAddress map[string]string
 	}
 )
 
 // NewMetadata create a new instance of Metadata
 func NewMetadata(enableGlobalDomain dynamicconfig.BoolPropertyFn, failoverVersionIncrement int64,
-	masterClusterName string, currentClusterName string,
-	clusterInitialFailoverVersions map[string]int64,
-	clusterToAddress map[string]string) Metadata {
+	masterClusterName string, currentClusterName string, clusterInitialFailoverVersions map[string]int64) Metadata {
 
 	if len(clusterInitialFailoverVersions) < 0 {
 		panic("Empty initial failover versions for cluster")
@@ -107,9 +101,6 @@ func NewMetadata(enableGlobalDomain dynamicconfig.BoolPropertyFn, failoverVersio
 	if len(initialFailoverVersionClusters) != len(clusterInitialFailoverVersions) {
 		panic("Cluster to initial failover versions have duplicate initial versions")
 	}
-	if len(initialFailoverVersionClusters) != len(clusterToAddress) {
-		panic("Cluster to address size is different than Cluster to initial failover versions")
-	}
 
 	return &metadataImpl{
 		enableGlobalDomain:             enableGlobalDomain,
@@ -118,7 +109,6 @@ func NewMetadata(enableGlobalDomain dynamicconfig.BoolPropertyFn, failoverVersio
 		currentClusterName:             currentClusterName,
 		clusterInitialFailoverVersions: clusterInitialFailoverVersions,
 		initialFailoverVersionClusters: initialFailoverVersionClusters,
-		clusterToAddress:               clusterToAddress,
 	}
 }
 
@@ -182,9 +172,4 @@ func (metadata *metadataImpl) ClusterNameForFailoverVersion(failoverVersion int6
 		))
 	}
 	return clusterName
-}
-
-// GetAllClientAddress return the frontend address for each cluster name
-func (metadata *metadataImpl) GetAllClientAddress() map[string]string {
-	return metadata.clusterToAddress
 }
