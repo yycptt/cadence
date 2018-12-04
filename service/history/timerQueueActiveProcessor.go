@@ -21,6 +21,7 @@
 package history
 
 import (
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -319,6 +320,13 @@ Update_History_Loop:
 		} else if msBuilder == nil || !msBuilder.IsWorkflowExecutionRunning() {
 			return nil
 		}
+
+		print := func(value interface{}) string {
+			bytes, _ := json.MarshalIndent(value, "", "  ")
+			return string(bytes)
+		}
+		t.logger.WithField("debug-ms-active", print(msBuilder.CopyToPersistence())).WithField("debug-timer", print(timerTask)).Info("Processing timers.")
+
 		tBuilder := t.historyService.getTimerBuilder(&context.workflowExecution)
 
 		var timerTasks []persistence.Task

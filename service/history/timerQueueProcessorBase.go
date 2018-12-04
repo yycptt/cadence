@@ -21,6 +21,7 @@
 package history
 
 import (
+	"encoding/json"
 	"errors"
 	"math"
 	"sync"
@@ -363,6 +364,12 @@ func (t *timerQueueProcessorBase) readAndFanoutTimerTasks() (*persistence.TimerT
 		t.notifyNewTimer(time.Time{}) // re-enqueue the event
 		return nil, err
 	}
+
+	print := func(value interface{}) string {
+		bytes, _ := json.MarshalIndent(value, "", "  ")
+		return string(bytes)
+	}
+	t.logger.WithField("debug-timer", print(timerTasks)).Info("Loaded timers.")
 
 	for _, task := range timerTasks {
 		// We have a timer to fire.

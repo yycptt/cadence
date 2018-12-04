@@ -21,6 +21,7 @@
 package history
 
 import (
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -246,6 +247,12 @@ func (c *workflowExecutionContext) update(transferTasks []persistence.Task, time
 		if errRet != nil {
 			// Clear all cached state in case of error
 			c.clear()
+		} else if c.msBuilder.GetExecutionInfo().WorkflowTypeName == "autobots-load-test-workflow" {
+			print := func(value interface{}) string {
+				bytes, _ := json.MarshalIndent(value, "", "  ")
+				return string(bytes)
+			}
+			c.logger.WithField("debug-ms", print(c.msBuilder.CopyToPersistence())).WithField("debug-timer", print(timerTasks)).Info("Persisted timers.")
 		}
 	}()
 

@@ -21,6 +21,7 @@
 package history
 
 import (
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -222,6 +223,13 @@ func (t *timerQueueStandbyProcessorImpl) processActivityTimeout(timerTask *persi
 	// task passed in is safe to be throw away.
 
 	return t.processTimer(timerTask, func(context *workflowExecutionContext, msBuilder mutableState) error {
+
+		print := func(value interface{}) string {
+			bytes, _ := json.MarshalIndent(value, "", "  ")
+			return string(bytes)
+		}
+		t.logger.WithField("debug-ms-standby", print(msBuilder.CopyToPersistence())).WithField("debug-timer", print(timerTask)).Info("Processing timers.")
+
 		tBuilder := t.getTimerBuilder()
 
 	ExpireActivityTimers:
