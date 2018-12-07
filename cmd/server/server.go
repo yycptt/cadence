@@ -25,7 +25,6 @@ import (
 	"log"
 	"time"
 
-	"github.com/uber/cadence/client"
 	"github.com/uber/cadence/common"
 	"github.com/uber/cadence/common/cluster"
 	"github.com/uber/cadence/common/service"
@@ -124,9 +123,7 @@ func (s *server) startService() common.Daemon {
 		s.cfg.ClustersInfo.MasterClusterName,
 		s.cfg.ClustersInfo.CurrentClusterName,
 		s.cfg.ClustersInfo.ClusterInitialFailoverVersions,
-		s.cfg.ClustersInfo.ClusterAddress,
 	)
-	params.DispatcherProvider = client.NewIPYarpcDispatcherProvider()
 	// TODO: We need to switch Cadence to use zap logger, until then just pass zap.NewNop
 
 	enableVisibilityToKafka := dc.GetBoolProperty(dynamicconfig.EnableVisibilityToKafka, dynamicconfig.DefaultEnableVisibilityToKafka)

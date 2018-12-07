@@ -22,12 +22,14 @@ package frontend
 
 import (
 	"context"
+	"sync"
 	"time"
 
 	"go.uber.org/yarpc"
 
 	"github.com/pborman/uuid"
 	"github.com/uber/cadence/common"
+	"github.com/uber/cadence/common/membership"
 	"go.uber.org/cadence/.gen/go/cadence/workflowserviceclient"
 	"go.uber.org/cadence/.gen/go/shared"
 )
@@ -42,22 +44,34 @@ const (
 )
 
 type clientImpl struct {
+	resolver        membership.ServiceResolver
+	thriftCacheLock sync.RWMutex
+	thriftCache     map[string]workflowserviceclient.Interface
+	rpcFactory      common.RPCFactory
 	timeout         time.Duration
 	longPollTimeout time.Duration
-	clients         common.ClientCache
 }
 
 // NewClient creates a new frontend service TChannel client
 func NewClient(
+	d common.RPCFactory,
+	monitor membership.Monitor,
 	timeout time.Duration,
 	longPollTimeout time.Duration,
-	clients common.ClientCache,
-) Client {
-	return &clientImpl{
+) (Client, error) {
+	sResolver, err := monitor.GetResolver(common.FrontendServiceName)
+	if err != nil {
+		return nil, err
+	}
+
+	client := &clientImpl{
+		rpcFactory:      d,
+		resolver:        sResolver,
+		thriftCache:     make(map[string]workflowserviceclient.Interface),
 		timeout:         timeout,
 		longPollTimeout: longPollTimeout,
-		clients:         clients,
 	}
+	return client, nil
 }
 
 func (c *clientImpl) DeprecateDomain(
@@ -67,7 +81,7 @@ func (c *clientImpl) DeprecateDomain(
 ) error {
 
 	opts = common.AggregateYarpcOptions(ctx, opts...)
-	client, err := c.getRandomClient()
+	client, err := c.getRandomHost()
 	if err != nil {
 		return err
 	}
@@ -83,7 +97,7 @@ func (c *clientImpl) DescribeDomain(
 ) (*shared.DescribeDomainResponse, error) {
 
 	opts = common.AggregateYarpcOptions(ctx, opts...)
-	client, err := c.getRandomClient()
+	client, err := c.getRandomHost()
 	if err != nil {
 		return nil, err
 	}
@@ -99,7 +113,7 @@ func (c *clientImpl) DescribeTaskList(
 ) (*shared.DescribeTaskListResponse, error) {
 
 	opts = common.AggregateYarpcOptions(ctx, opts...)
-	client, err := c.getRandomClient()
+	client, err := c.getRandomHost()
 	if err != nil {
 		return nil, err
 	}
@@ -115,7 +129,7 @@ func (c *clientImpl) DescribeWorkflowExecution(
 ) (*shared.DescribeWorkflowExecutionResponse, error) {
 
 	opts = common.AggregateYarpcOptions(ctx, opts...)
-	client, err := c.getRandomClient()
+	client, err := c.getRandomHost()
 	if err != nil {
 		return nil, err
 	}
@@ -131,7 +145,7 @@ func (c *clientImpl) GetWorkflowExecutionHistory(
 ) (*shared.GetWorkflowExecutionHistoryResponse, error) {
 
 	opts = common.AggregateYarpcOptions(ctx, opts...)
-	client, err := c.getRandomClient()
+	client, err := c.getRandomHost()
 	if err != nil {
 		return nil, err
 	}
@@ -147,7 +161,7 @@ func (c *clientImpl) ListClosedWorkflowExecutions(
 ) (*shared.ListClosedWorkflowExecutionsResponse, error) {
 
 	opts = common.AggregateYarpcOptions(ctx, opts...)
-	client, err := c.getRandomClient()
+	client, err := c.getRandomHost()
 	if err != nil {
 		return nil, err
 	}
@@ -163,7 +177,7 @@ func (c *clientImpl) ListDomains(
 ) (*shared.ListDomainsResponse, error) {
 
 	opts = common.AggregateYarpcOptions(ctx, opts...)
-	client, err := c.getRandomClient()
+	client, err := c.getRandomHost()
 	if err != nil {
 		return nil, err
 	}
@@ -179,7 +193,7 @@ func (c *clientImpl) ListOpenWorkflowExecutions(
 ) (*shared.ListOpenWorkflowExecutionsResponse, error) {
 
 	opts = common.AggregateYarpcOptions(ctx, opts...)
-	client, err := c.getRandomClient()
+	client, err := c.getRandomHost()
 	if err != nil {
 		return nil, err
 	}
@@ -195,7 +209,7 @@ func (c *clientImpl) PollForActivityTask(
 ) (*shared.PollForActivityTaskResponse, error) {
 
 	opts = common.AggregateYarpcOptions(ctx, opts...)
-	client, err := c.getRandomClient()
+	client, err := c.getRandomHost()
 	if err != nil {
 		return nil, err
 	}
@@ -211,7 +225,7 @@ func (c *clientImpl) PollForDecisionTask(
 ) (*shared.PollForDecisionTaskResponse, error) {
 
 	opts = common.AggregateYarpcOptions(ctx, opts...)
-	client, err := c.getRandomClient()
+	client, err := c.getRandomHost()
 	if err != nil {
 		return nil, err
 	}
@@ -227,7 +241,7 @@ func (c *clientImpl) QueryWorkflow(
 ) (*shared.QueryWorkflowResponse, error) {
 
 	opts = common.AggregateYarpcOptions(ctx, opts...)
-	client, err := c.getRandomClient()
+	client, err := c.getRandomHost()
 	if err != nil {
 		return nil, err
 	}
@@ -243,7 +257,7 @@ func (c *clientImpl) RecordActivityTaskHeartbeat(
 ) (*shared.RecordActivityTaskHeartbeatResponse, error) {
 
 	opts = common.AggregateYarpcOptions(ctx, opts...)
-	client, err := c.getRandomClient()
+	client, err := c.getRandomHost()
 	if err != nil {
 		return nil, err
 	}
@@ -259,7 +273,7 @@ func (c *clientImpl) RecordActivityTaskHeartbeatByID(
 ) (*shared.RecordActivityTaskHeartbeatResponse, error) {
 
 	opts = common.AggregateYarpcOptions(ctx, opts...)
-	client, err := c.getRandomClient()
+	client, err := c.getRandomHost()
 	if err != nil {
 		return nil, err
 	}
@@ -275,7 +289,7 @@ func (c *clientImpl) RegisterDomain(
 ) error {
 
 	opts = common.AggregateYarpcOptions(ctx, opts...)
-	client, err := c.getRandomClient()
+	client, err := c.getRandomHost()
 	if err != nil {
 		return err
 	}
@@ -291,7 +305,7 @@ func (c *clientImpl) RequestCancelWorkflowExecution(
 ) error {
 
 	opts = common.AggregateYarpcOptions(ctx, opts...)
-	client, err := c.getRandomClient()
+	client, err := c.getRandomHost()
 	if err != nil {
 		return err
 	}
@@ -307,7 +321,7 @@ func (c *clientImpl) ResetStickyTaskList(
 ) (*shared.ResetStickyTaskListResponse, error) {
 
 	opts = common.AggregateYarpcOptions(ctx, opts...)
-	client, err := c.getRandomClient()
+	client, err := c.getRandomHost()
 	if err != nil {
 		return nil, err
 	}
@@ -323,7 +337,7 @@ func (c *clientImpl) RespondActivityTaskCanceled(
 ) error {
 
 	opts = common.AggregateYarpcOptions(ctx, opts...)
-	client, err := c.getRandomClient()
+	client, err := c.getRandomHost()
 	if err != nil {
 		return err
 	}
@@ -339,7 +353,7 @@ func (c *clientImpl) RespondActivityTaskCanceledByID(
 ) error {
 
 	opts = common.AggregateYarpcOptions(ctx, opts...)
-	client, err := c.getRandomClient()
+	client, err := c.getRandomHost()
 	if err != nil {
 		return err
 	}
@@ -355,7 +369,7 @@ func (c *clientImpl) RespondActivityTaskCompleted(
 ) error {
 
 	opts = common.AggregateYarpcOptions(ctx, opts...)
-	client, err := c.getRandomClient()
+	client, err := c.getRandomHost()
 	if err != nil {
 		return err
 	}
@@ -371,7 +385,7 @@ func (c *clientImpl) RespondActivityTaskCompletedByID(
 ) error {
 
 	opts = common.AggregateYarpcOptions(ctx, opts...)
-	client, err := c.getRandomClient()
+	client, err := c.getRandomHost()
 	if err != nil {
 		return err
 	}
@@ -387,7 +401,7 @@ func (c *clientImpl) RespondActivityTaskFailed(
 ) error {
 
 	opts = common.AggregateYarpcOptions(ctx, opts...)
-	client, err := c.getRandomClient()
+	client, err := c.getRandomHost()
 	if err != nil {
 		return err
 	}
@@ -403,7 +417,7 @@ func (c *clientImpl) RespondActivityTaskFailedByID(
 ) error {
 
 	opts = common.AggregateYarpcOptions(ctx, opts...)
-	client, err := c.getRandomClient()
+	client, err := c.getRandomHost()
 	if err != nil {
 		return err
 	}
@@ -419,7 +433,7 @@ func (c *clientImpl) RespondDecisionTaskCompleted(
 ) (*shared.RespondDecisionTaskCompletedResponse, error) {
 
 	opts = common.AggregateYarpcOptions(ctx, opts...)
-	client, err := c.getRandomClient()
+	client, err := c.getRandomHost()
 	if err != nil {
 		return nil, err
 	}
@@ -435,7 +449,7 @@ func (c *clientImpl) RespondDecisionTaskFailed(
 ) error {
 
 	opts = common.AggregateYarpcOptions(ctx, opts...)
-	client, err := c.getRandomClient()
+	client, err := c.getRandomHost()
 	if err != nil {
 		return err
 	}
@@ -451,7 +465,7 @@ func (c *clientImpl) RespondQueryTaskCompleted(
 ) error {
 
 	opts = common.AggregateYarpcOptions(ctx, opts...)
-	client, err := c.getRandomClient()
+	client, err := c.getRandomHost()
 	if err != nil {
 		return err
 	}
@@ -467,7 +481,7 @@ func (c *clientImpl) SignalWithStartWorkflowExecution(
 ) (*shared.StartWorkflowExecutionResponse, error) {
 
 	opts = common.AggregateYarpcOptions(ctx, opts...)
-	client, err := c.getRandomClient()
+	client, err := c.getRandomHost()
 	if err != nil {
 		return nil, err
 	}
@@ -483,7 +497,7 @@ func (c *clientImpl) SignalWorkflowExecution(
 ) error {
 
 	opts = common.AggregateYarpcOptions(ctx, opts...)
-	client, err := c.getRandomClient()
+	client, err := c.getRandomHost()
 	if err != nil {
 		return err
 	}
@@ -499,7 +513,7 @@ func (c *clientImpl) StartWorkflowExecution(
 ) (*shared.StartWorkflowExecutionResponse, error) {
 
 	opts = common.AggregateYarpcOptions(ctx, opts...)
-	client, err := c.getRandomClient()
+	client, err := c.getRandomHost()
 	if err != nil {
 		return nil, err
 	}
@@ -515,7 +529,7 @@ func (c *clientImpl) TerminateWorkflowExecution(
 ) error {
 
 	opts = common.AggregateYarpcOptions(ctx, opts...)
-	client, err := c.getRandomClient()
+	client, err := c.getRandomHost()
 	if err != nil {
 		return err
 	}
@@ -531,7 +545,7 @@ func (c *clientImpl) UpdateDomain(
 ) (*shared.UpdateDomainResponse, error) {
 
 	opts = common.AggregateYarpcOptions(ctx, opts...)
-	client, err := c.getRandomClient()
+	client, err := c.getRandomHost()
 	if err != nil {
 		return nil, err
 	}
@@ -554,13 +568,35 @@ func (c *clientImpl) createLongPollContext(parent context.Context) (context.Cont
 	return context.WithTimeout(parent, c.longPollTimeout)
 }
 
-func (c *clientImpl) getRandomClient() (workflowserviceclient.Interface, error) {
+func (c *clientImpl) getRandomHost() (workflowserviceclient.Interface, error) {
 	// generate a random shard key to do load balancing
 	key := uuid.New()
-	client, err := c.clients.GetClientForKey(key)
+	host, err := c.resolver.Lookup(key)
 	if err != nil {
 		return nil, err
 	}
+	return c.getThriftClient(host.GetAddress()), nil
+}
 
-	return client.(workflowserviceclient.Interface), nil
+func (c *clientImpl) getThriftClient(hostPort string) workflowserviceclient.Interface {
+	c.thriftCacheLock.RLock()
+	client, ok := c.thriftCache[hostPort]
+	c.thriftCacheLock.RUnlock()
+	if ok {
+		return client
+	}
+
+	c.thriftCacheLock.Lock()
+	defer c.thriftCacheLock.Unlock()
+
+	// check again if in the cache cause it might have been added
+	// before we acquired the lock
+	client, ok = c.thriftCache[hostPort]
+	if !ok {
+		d := c.rpcFactory.CreateDispatcherForOutbound(
+			"cadence-frontend-client", common.FrontendServiceName, hostPort)
+		client = workflowserviceclient.New(d.ClientConfig(common.FrontendServiceName))
+		c.thriftCache[hostPort] = client
+	}
+	return client
 }

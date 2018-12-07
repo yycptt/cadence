@@ -32,7 +32,6 @@ import (
 	"github.com/uber-common/bark"
 	"github.com/uber-go/tally"
 	"github.com/uber/cadence/.gen/go/cadence/workflowserviceclient"
-	"github.com/uber/cadence/client"
 	"github.com/uber/cadence/common"
 	"github.com/uber/cadence/common/cluster"
 	"github.com/uber/cadence/common/messaging"
@@ -86,7 +85,6 @@ type (
 		numberOfHistoryHosts  int
 		logger                bark.Logger
 		clusterMetadata       cluster.Metadata
-		dispatcherProvider    client.DispatcherProvider
 		messagingClient       messaging.Client
 		metadataMgr           persistence.MetadataManager
 		metadataMgrV2         persistence.MetadataManager
@@ -111,7 +109,7 @@ type (
 )
 
 // NewCadence returns an instance that hosts full cadence in one process
-func NewCadence(clusterMetadata cluster.Metadata, dispatcherProvider client.DispatcherProvider, messagingClient messaging.Client, metadataMgr persistence.MetadataManager,
+func NewCadence(clusterMetadata cluster.Metadata, messagingClient messaging.Client, metadataMgr persistence.MetadataManager,
 	metadataMgrV2 persistence.MetadataManager, shardMgr persistence.ShardManager, historyMgr persistence.HistoryManager, historyV2Mgr persistence.HistoryV2Manager,
 	executionMgrFactory persistence.ExecutionManagerFactory, taskMgr persistence.TaskManager,
 	visibilityMgr persistence.VisibilityManager, numberOfHistoryShards, numberOfHistoryHosts int,
@@ -122,7 +120,6 @@ func NewCadence(clusterMetadata cluster.Metadata, dispatcherProvider client.Disp
 		numberOfHistoryHosts:  numberOfHistoryHosts,
 		logger:                logger,
 		clusterMetadata:       clusterMetadata,
-		dispatcherProvider:    dispatcherProvider,
 		messagingClient:       messagingClient,
 		metadataMgr:           metadataMgr,
 		metadataMgrV2:         metadataMgrV2,
@@ -190,9 +187,9 @@ func (c *cadenceImpl) Stop() {
 
 func (c *cadenceImpl) FrontendAddress() string {
 	if c.clusterNo != 0 {
-		return cluster.TestAlternativeClusterFrontendAddress
+		return "127.0.0.1:8104"
 	}
-	return cluster.TestCurrentClusterFrontendAddress
+	return "127.0.0.1:7104"
 }
 
 func (c *cadenceImpl) FrontendPProfPort() int {
@@ -278,7 +275,6 @@ func (c *cadenceImpl) startFrontend(rpHosts []string, startWG *sync.WaitGroup) {
 	params.MetricScope = tally.NewTestScope(common.FrontendServiceName, make(map[string]string))
 	params.RingpopFactory = newRingpopFactory(rpHosts)
 	params.ClusterMetadata = c.clusterMetadata
-	params.DispatcherProvider = c.dispatcherProvider
 	params.MessagingClient = c.messagingClient
 	cassandraConfig := config.Cassandra{Hosts: "127.0.0.1"}
 	params.PersistenceConfig = config.Persistence{
@@ -327,7 +323,6 @@ func (c *cadenceImpl) startHistory(rpHosts []string, startWG *sync.WaitGroup, en
 		params.MetricScope = tally.NewTestScope(common.HistoryServiceName, make(map[string]string))
 		params.RingpopFactory = newRingpopFactory(rpHosts)
 		params.ClusterMetadata = c.clusterMetadata
-		params.DispatcherProvider = c.dispatcherProvider
 		params.MessagingClient = c.messagingClient
 		cassandraConfig := config.Cassandra{Hosts: "127.0.0.1"}
 		params.PersistenceConfig = config.Persistence{
@@ -361,7 +356,6 @@ func (c *cadenceImpl) startMatching(rpHosts []string, startWG *sync.WaitGroup) {
 	params.MetricScope = tally.NewTestScope(common.MatchingServiceName, make(map[string]string))
 	params.RingpopFactory = newRingpopFactory(rpHosts)
 	params.ClusterMetadata = c.clusterMetadata
-	params.DispatcherProvider = c.dispatcherProvider
 	cassandraConfig := config.Cassandra{Hosts: "127.0.0.1"}
 	params.PersistenceConfig = config.Persistence{
 		NumHistoryShards: c.numberOfHistoryShards,
@@ -388,7 +382,6 @@ func (c *cadenceImpl) startWorker(rpHosts []string, startWG *sync.WaitGroup) {
 	params.MetricScope = tally.NewTestScope(common.WorkerServiceName, make(map[string]string))
 	params.RingpopFactory = newRingpopFactory(rpHosts)
 	params.ClusterMetadata = c.clusterMetadata
-	params.DispatcherProvider = c.dispatcherProvider
 	cassandraConfig := config.Cassandra{Hosts: "127.0.0.1"}
 	params.PersistenceConfig = config.Persistence{
 		NumHistoryShards: c.numberOfHistoryShards,

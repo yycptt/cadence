@@ -20,9 +20,7 @@
 
 package cluster
 
-import (
-	"github.com/uber/cadence/common/service/dynamicconfig"
-)
+import "github.com/uber/cadence/common/service/dynamicconfig"
 
 const (
 	// TestCurrentClusterInitialFailoverVersion is initial failover version for current cluster
@@ -35,10 +33,6 @@ const (
 	TestCurrentClusterName = "active"
 	// TestAlternativeClusterName is alternative cluster used for test
 	TestAlternativeClusterName = "standby"
-	// TestCurrentClusterFrontendAddress is the ip port address of current cluster
-	TestCurrentClusterFrontendAddress = "127.0.0.1:7104"
-	// TestAlternativeClusterFrontendAddress is the ip port address of alternative cluster
-	TestAlternativeClusterFrontendAddress = "127.0.0.1:8104"
 )
 
 var (
@@ -63,9 +57,5 @@ func GetTestClusterMetadata(enableGlobalDomain bool, isMasterCluster bool) Metad
 		masterClusterName,
 		TestCurrentClusterName,
 		TestAllClusterFailoverVersions,
-		map[string]string{
-			TestCurrentClusterName:     TestCurrentClusterFrontendAddress,
-			TestAlternativeClusterName: TestAlternativeClusterFrontendAddress,
-		},
 	)
 }

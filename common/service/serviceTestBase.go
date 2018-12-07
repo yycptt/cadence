@@ -97,11 +97,6 @@ func (s *serviceTestBase) GetClientFactory() client.Factory {
 	return s.clientFactory
 }
 
-// GetClientBean returns the client bean used by service
-func (s *serviceTestBase) GetClientBean() client.Bean {
-	return nil
-}
-
 // GetDispatcher returns the dispatcher used by service
 func (s *serviceTestBase) GetDispatcher() *yarpc.Dispatcher {
 	return nil

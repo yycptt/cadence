@@ -197,8 +197,6 @@ type (
 		CurrentClusterName string `yaml:"currentClusterName"`
 		// ClusterInitialFailoverVersions contains all cluster names to corresponding initial failover version
 		ClusterInitialFailoverVersions map[string]int64 `yaml:"clusterInitialFailoverVersion"`
-		// ClusterAddress contains all cluster names to corresponding address
-		ClusterAddress map[string]string `yaml:"clusterAddress"`
 	}
 
 	// Metrics contains the config items for metrics subsystem
