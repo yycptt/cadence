@@ -1965,6 +1965,12 @@ func (wh *WorkflowHandler) GetWorkflowExecutionHistory(
 				wh.getHistory(scope, domainID, *execution, token.FirstEventID, token.NextEventID,
 					getRequest.GetMaximumPageSize(), token.PersistenceToken, token.TransientDecision, token.EventStoreVersion, token.BranchToken)
 			if err != nil {
+				wh.GetLogger().WithFields(bark.Fields{
+					logging.TagWorkflowExecutionID: getRequest.Execution.GetWorkflowId(),
+					logging.TagWorkflowRunID:       getRequest.Execution.GetRunId(),
+					logging.TagDomainID:            domainID,
+					"debugerror":                   err,
+				}).Warn("debug pagination for reset")
 				return nil, wh.error(err, scope)
 			}
 
