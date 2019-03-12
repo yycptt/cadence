@@ -1817,12 +1817,21 @@ func (wh *WorkflowHandler) StartWorkflowExecution(
 // GetWorkflowExecutionHistory - retrieves the history of workflow execution
 func (wh *WorkflowHandler) GetWorkflowExecutionHistory(
 	ctx context.Context,
-	getRequest *gen.GetWorkflowExecutionHistoryRequest) (*gen.GetWorkflowExecutionHistoryResponse, error) {
+	getRequest *gen.GetWorkflowExecutionHistoryRequest) (resp *gen.GetWorkflowExecutionHistoryResponse, retError error) {
 
 	scope := metrics.FrontendGetWorkflowExecutionHistoryScope
 	sw := wh.startRequestProfile(scope)
 	defer sw.Stop()
 
+	defer func() {
+		if retError != nil {
+			wh.GetLogger().WithFields(bark.Fields{
+				logging.TagWorkflowExecutionID: getRequest.Execution.GetWorkflowId(),
+				logging.TagWorkflowRunID:       getRequest.Execution.GetRunId(),
+				"debugerror":                   retError.Error(),
+			}).Warn("debug pagination for reset")
+		}
+	}()
 	if getRequest == nil {
 		return nil, wh.error(errRequestNotSet, scope)
 	}
@@ -1965,12 +1974,6 @@ func (wh *WorkflowHandler) GetWorkflowExecutionHistory(
 				wh.getHistory(scope, domainID, *execution, token.FirstEventID, token.NextEventID,
 					getRequest.GetMaximumPageSize(), token.PersistenceToken, token.TransientDecision, token.EventStoreVersion, token.BranchToken)
 			if err != nil {
-				wh.GetLogger().WithFields(bark.Fields{
-					logging.TagWorkflowExecutionID: getRequest.Execution.GetWorkflowId(),
-					logging.TagWorkflowRunID:       getRequest.Execution.GetRunId(),
-					logging.TagDomainID:            domainID,
-					"debugerror":                   err,
-				}).Warn("debug pagination for reset")
 				return nil, wh.error(err, scope)
 			}
 
