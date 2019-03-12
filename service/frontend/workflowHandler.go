@@ -28,6 +28,8 @@ import (
 	"sync"
 	"time"
 
+	"runtime/debug"
+
 	"github.com/pborman/uuid"
 	"github.com/uber-common/bark"
 	"github.com/uber-go/tally"
@@ -2749,10 +2751,22 @@ func (wh *WorkflowHandler) DescribeTaskList(ctx context.Context, request *gen.De
 
 func (wh *WorkflowHandler) getHistory(scope int, domainID string, execution gen.WorkflowExecution,
 	firstEventID, nextEventID int64, pageSize int32, nextPageToken []byte,
-	transientDecision *gen.TransientDecisionInfo, eventStoreVersion int32, branchToken []byte) (*gen.History, []byte, error) {
+	transientDecision *gen.TransientDecisionInfo, eventStoreVersion int32, branchToken []byte) (respEvents *gen.History, respToken []byte, retError error) {
 
 	historyEvents := []*gen.HistoryEvent{}
 	var size int
+
+	defer func() {
+		if retError != nil {
+			wh.GetLogger().WithFields(bark.Fields{
+				logging.TagWorkflowExecutionID: execution.GetWorkflowId(),
+				logging.TagWorkflowRunID:       execution.GetRunId(),
+				"debugerror":                   retError.Error(),
+				"debugstack":                   debug.Stack(),
+			}).Warn("debug pagination for getHistory")
+		}
+	}()
+
 	if eventStoreVersion == persistence.EventStoreVersionV2 {
 		var err error
 		historyEvents, size, nextPageToken, err = persistence.ReadFullPageV2Events(wh.historyV2Mgr, &persistence.ReadHistoryBranchRequest{
