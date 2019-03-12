@@ -1826,13 +1826,11 @@ func (wh *WorkflowHandler) GetWorkflowExecutionHistory(
 	defer sw.Stop()
 
 	defer func() {
-		if retError != nil {
-			wh.GetLogger().WithFields(bark.Fields{
-				logging.TagWorkflowExecutionID: getRequest.Execution.GetWorkflowId(),
-				logging.TagWorkflowRunID:       getRequest.Execution.GetRunId(),
-				"debugerror":                   retError.Error(),
-			}).Warn("debug pagination for reset")
-		}
+		wh.GetLogger().WithFields(bark.Fields{
+			logging.TagWorkflowExecutionID: getRequest.Execution.GetWorkflowId(),
+			logging.TagWorkflowRunID:       getRequest.Execution.GetRunId(),
+			"debugerror":                   retError.Error(),
+		}).Warn("debug pagination for reset")
 	}()
 	if getRequest == nil {
 		return nil, wh.error(errRequestNotSet, scope)
@@ -2757,14 +2755,12 @@ func (wh *WorkflowHandler) getHistory(scope int, domainID string, execution gen.
 	var size int
 
 	defer func() {
-		if retError != nil {
-			wh.GetLogger().WithFields(bark.Fields{
-				logging.TagWorkflowExecutionID: execution.GetWorkflowId(),
-				logging.TagWorkflowRunID:       execution.GetRunId(),
-				"debugerror":                   retError.Error(),
-				"debugstack":                   debug.Stack(),
-			}).Warn("debug pagination for getHistory")
-		}
+		wh.GetLogger().WithFields(bark.Fields{
+			logging.TagWorkflowExecutionID: execution.GetWorkflowId(),
+			logging.TagWorkflowRunID:       execution.GetRunId(),
+			"debugerror":                   retError.Error(),
+			"debugstack":                   debug.Stack(),
+		}).Warn("debug pagination for getHistory")
 	}()
 
 	if eventStoreVersion == persistence.EventStoreVersionV2 {

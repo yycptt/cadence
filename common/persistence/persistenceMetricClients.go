@@ -21,6 +21,8 @@
 package persistence
 
 import (
+	"runtime/debug"
+
 	"github.com/uber-common/bark"
 	workflow "github.com/uber/cadence/.gen/go/shared"
 	"github.com/uber/cadence/common/logging"
@@ -970,6 +972,10 @@ func (p *historyV2PersistenceClient) ReadHistoryBranch(request *ReadHistoryBranc
 	response, err := p.persistence.ReadHistoryBranch(request)
 	sw.Stop()
 	if err != nil {
+		p.logger.WithFields(bark.Fields{
+			"debugerror": err.Error(),
+			"debugstack": debug.Stack(),
+		}).Warn("debug ReadHistoryBranch for stack")
 		p.updateErrorMetric(metrics.PersistenceReadHistoryBranchScope, err)
 	}
 	return response, err
