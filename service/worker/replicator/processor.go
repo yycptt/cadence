@@ -490,6 +490,13 @@ Loop:
 		ResetWorkflow:           attr.ResetWorkflow,
 	}
 
+	//temporary fix
+	if req.GetResetWorkflow() {
+		historyAfterReset := req.History.Events
+		firstEvent := historyAfterReset[0]
+		dattr := firstEvent.DecisionTaskFailedEventAttributes
+		req.WorkflowExecution.RunId = dattr.BaseRunId
+	}
 RetryLoop:
 	for i := 0; i < p.config.ReplicatorHistoryBufferRetryCount(); i++ {
 		ctx, cancel := context.WithTimeout(context.Background(), replicationTimeout)
