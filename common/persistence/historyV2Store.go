@@ -345,7 +345,7 @@ func (m *historyV2ManagerImpl) readHistoryBranch(byBatch bool, request *ReadHist
 			continue
 		}
 		if *fe.EventId != token.LastEventID+1 {
-			logger.Errorf("Corrupted incontinouous event batch, %v, %v, %v, %v, %v, %v, %v", *fe.Version, *le.Version, *fe.EventId, *le.EventId, el, token.LastEventID, debug.Stack())
+			logger.Errorf("Corrupted incontinouous event batch, %v, %v, %v, %v, %v, %v, %v", *fe.Version, *le.Version, *fe.EventId, *le.EventId, el, token.LastEventID, string(debug.Stack()))
 			return nil, nil, nil, 0, 0, &workflow.InternalServiceError{
 				Message: fmt.Sprintf("corrupted history event batch, eventID is not continouous"),
 			}
