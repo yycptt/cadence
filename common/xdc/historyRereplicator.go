@@ -128,6 +128,7 @@ func (h *HistoryRereplicatorImpl) SendMultiWorkflowHistory(domainID string, work
 	// beginingRunID can be empty, if there is no workflow in DB
 	// endingRunID must not be empty, since this function is trigger missing events of endingRunID
 
+	//TODO log input
 	rereplicationContext := newHistoryRereplicationContext(domainID, workflowID, beginingRunID, beginingFirstEventID, endingRunID, endingNextEventID, h)
 
 	runID := beginingRunID
@@ -379,12 +380,14 @@ func (c *historyRereplicationContext) handleEmptyHistory(domainID string, workfl
 func (c *historyRereplicationContext) getHistory(domainID string, workflowID string, runID string,
 	firstEventID int64, nextEventID int64, token []byte, pageSize int32) (*admin.GetWorkflowExecutionRawHistoryResponse, error) {
 
+	//TODO add branch token to log
 	logger := c.rereplicator.logger.WithFields(bark.Fields{
 		logging.TagDomainID:            domainID,
 		logging.TagWorkflowExecutionID: workflowID,
 		logging.TagWorkflowRunID:       runID,
 		logging.TagFirstEventID:        firstEventID,
 		logging.TagNextEventID:         nextEventID,
+		//"token":
 	})
 
 	domainEntry, err := c.rereplicator.domainCache.GetDomainByID(domainID)

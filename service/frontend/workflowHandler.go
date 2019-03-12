@@ -28,8 +28,6 @@ import (
 	"sync"
 	"time"
 
-	"runtime/debug"
-
 	"github.com/pborman/uuid"
 	"github.com/uber-common/bark"
 	"github.com/uber-go/tally"
@@ -1825,13 +1823,6 @@ func (wh *WorkflowHandler) GetWorkflowExecutionHistory(
 	sw := wh.startRequestProfile(scope)
 	defer sw.Stop()
 
-	defer func() {
-		wh.GetLogger().WithFields(bark.Fields{
-			logging.TagWorkflowExecutionID: getRequest.Execution.GetWorkflowId(),
-			logging.TagWorkflowRunID:       getRequest.Execution.GetRunId(),
-			"debugerror":                   retError.Error(),
-		}).Warn("debug pagination for reset")
-	}()
 	if getRequest == nil {
 		return nil, wh.error(errRequestNotSet, scope)
 	}
@@ -2753,15 +2744,6 @@ func (wh *WorkflowHandler) getHistory(scope int, domainID string, execution gen.
 
 	historyEvents := []*gen.HistoryEvent{}
 	var size int
-
-	defer func() {
-		wh.GetLogger().WithFields(bark.Fields{
-			logging.TagWorkflowExecutionID: execution.GetWorkflowId(),
-			logging.TagWorkflowRunID:       execution.GetRunId(),
-			"debugerror":                   retError.Error(),
-			"debugstack":                   debug.Stack(),
-		}).Warn("debug pagination for getHistory")
-	}()
 
 	if eventStoreVersion == persistence.EventStoreVersionV2 {
 		var err error
