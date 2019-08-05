@@ -30,3 +30,5 @@ frontend.validSearchAttributes:
 system.minRetentionDays:
 - value: 0
   constraints: {}
+history.timerProcessorHistoryArchivalSizeLimit:
+- value: 5120

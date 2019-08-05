@@ -37,6 +37,7 @@ package filestore
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path"
 	"strconv"
@@ -116,6 +117,7 @@ func (h *historyArchiver) Archive(
 	request *archiver.ArchiveHistoryRequest,
 	opts ...archiver.ArchiveOption,
 ) (err error) {
+	fmt.Println("@@@", "ycyang: in archive method", request.WorkflowID, request.RunID)
 	featureCatalog := archiver.GetFeatureCatalog(opts...)
 	defer func() {
 		if err != nil && !common.IsPersistenceTransientError(err) && featureCatalog.NonRetriableError != nil {
@@ -218,7 +220,11 @@ func (h *historyArchiver) Get(
 	} else {
 		highestVersion, err := getHighestVersion(dirPath, request)
 		if err != nil {
-			return nil, &shared.InternalServiceError{Message: err.Error()}
+			if err == archiver.ErrHistoryNotExist {
+				return nil, &shared.EntityNotExistsError{Message: err.Error()}
+			} else {
+				return nil, &shared.InternalServiceError{Message: err.Error()}
+			}
 		}
 		token = &getHistoryToken{
 			CloseFailoverVersion: *highestVersion,

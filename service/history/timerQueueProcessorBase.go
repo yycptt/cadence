@@ -603,7 +603,7 @@ func (t *timerQueueProcessorBase) getDomainIDAndWorkflowExecution(
 func (t *timerQueueProcessorBase) processDeleteHistoryEvent(
 	task *persistence.TimerTaskInfo,
 ) (retError error) {
-
+	fmt.Println("@@@", "ycyang: in delete task", task.WorkflowID, task.RunID)
 	context, release, err := t.cache.getOrCreateWorkflowExecutionForBackground(t.getDomainIDAndWorkflowExecution(task))
 	if err != nil {
 		return err
@@ -682,6 +682,7 @@ func (t *timerQueueProcessorBase) archiveWorkflow(
 	msBuilder mutableState,
 	domainCacheEntry *cache.DomainCacheEntry,
 ) error {
+	fmt.Println("@@@", "ycyang: try to archive workflow", task.WorkflowID, task.RunID)
 	executionStats, err := workflowContext.loadExecutionStats()
 	if err != nil {
 		return err
