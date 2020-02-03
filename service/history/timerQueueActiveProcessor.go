@@ -385,6 +385,12 @@ func (t *timerQueueActiveProcessorImpl) processActivityTimeout(
 
 Loop:
 	for _, timerSequenceID := range timerSequence.loadAndSortActivityTimers() {
+		if expired := timerSequence.isExpired(referenceTime, timerSequenceID); !expired {
+			// timer sequence IDs are sorted, once there is one timer
+			// sequence ID not expired, all after that wil not expired
+			break Loop
+		}
+
 		activityInfo, ok := mutableState.GetActivityInfo(timerSequenceID.eventID)
 		if !ok || timerSequenceID.attempt < activityInfo.Attempt {
 			// handle 2 cases:
@@ -394,12 +400,6 @@ Loop:
 			// 2. timerSequenceID.attempt < activityInfo.Attempt
 			//  retry could update activity attempt, should not timeouts new attempt
 			continue Loop
-		}
-
-		if expired := timerSequence.isExpired(referenceTime, timerSequenceID); !expired {
-			// timer sequence IDs are sorted, once there is one timer
-			// sequence ID not expired, all after that wil not expired
-			break Loop
 		}
 
 		if timerSequenceID.timerType != timerTypeScheduleToStart {
