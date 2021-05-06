@@ -1535,7 +1535,8 @@ func ResetWorkflow(c *cli.Context) {
 	resetBaseRunID := rid
 	decisionFinishID := eventID
 	if resetType != "" {
-		resetBaseRunID, decisionFinishID, err = getResetEventIDByType(ctx, c, resetType, domain, wid, rid, frontendClient)
+		panic("don't run this command")
+		// resetBaseRunID, decisionFinishID, err = getResetEventIDByType(ctx, c, resetType, domain, wid, rid, frontendClient)
 		if err != nil {
 			ErrorAndExit("getResetEventIDByType failed", err)
 		}
@@ -1760,18 +1761,14 @@ func doReset(c *cli.Context, domain, wid, rid string, params batchResetParamsTyp
 	ctx, cancel := newContext(c)
 	defer cancel()
 
-	frontendClient := cFactory.ServerFrontendClient(c)
-	resp, err := frontendClient.DescribeWorkflowExecution(ctx, &types.DescribeWorkflowExecutionRequest{
-		Domain: domain,
-		Execution: &types.WorkflowExecution{
-			WorkflowID: wid,
-		},
-	})
+	// frontendClient := cFactory.ServerFrontendClient(c)
+	wfClient := getWorkflowClient(c)
+	resp, err := wfClient.DescribeWorkflowExecution(ctx, wid, "")
 	if err != nil {
 		return printErrorAndReturn("DescribeWorkflowExecution failed", err)
 	}
 
-	currentRunID := resp.WorkflowExecutionInfo.Execution.GetRunID()
+	currentRunID := resp.WorkflowExecutionInfo.Execution.GetRunId()
 	if currentRunID != rid && params.skipBaseNotCurrent {
 		fmt.Println("skip because base run is different from current run: ", wid, rid, currentRunID)
 		return nil
@@ -1788,18 +1785,18 @@ func doReset(c *cli.Context, domain, wid, rid string, params batchResetParamsTyp
 		}
 	}
 
-	if params.nonDeterministicOnly {
-		isLDN, err := isLastEventDecisionTaskFailedWithNonDeterminism(ctx, domain, wid, rid, frontendClient)
-		if err != nil {
-			return printErrorAndReturn("check isLastEventDecisionTaskFailedWithNonDeterminism failed", err)
-		}
-		if !isLDN {
-			fmt.Println("skip because last event is not DecisionTaskFailedWithNonDeterminism")
-			return nil
-		}
-	}
+	// if params.nonDeterministicOnly {
+	// 	isLDN, err := isLastEventDecisionTaskFailedWithNonDeterminism(ctx, domain, wid, rid, frontendClient)
+	// 	if err != nil {
+	// 		return printErrorAndReturn("check isLastEventDecisionTaskFailedWithNonDeterminism failed", err)
+	// 	}
+	// 	if !isLDN {
+	// 		fmt.Println("skip because last event is not DecisionTaskFailedWithNonDeterminism")
+	// 		return nil
+	// 	}
+	// }
 
-	resetBaseRunID, decisionFinishID, err := getResetEventIDByType(ctx, c, params.resetType, domain, wid, rid, frontendClient)
+	resetBaseRunID, decisionFinishID, err := getResetEventIDByType(ctx, c, params.resetType, domain, wid, rid, wfClient)
 	if err != nil {
 		return printErrorAndReturn("getResetEventIDByType failed", err)
 	}
@@ -1808,22 +1805,33 @@ func doReset(c *cli.Context, domain, wid, rid string, params batchResetParamsTyp
 	if params.dryRun {
 		fmt.Printf("dry run to reset wid: %v, rid:%v to baseRunID:%v, eventID:%v \n", wid, rid, resetBaseRunID, decisionFinishID)
 	} else {
-		resp2, err := frontendClient.ResetWorkflowExecution(ctx, &types.ResetWorkflowExecutionRequest{
-			Domain: domain,
-			WorkflowExecution: &types.WorkflowExecution{
-				WorkflowID: wid,
-				RunID:      resetBaseRunID,
+		resp2, err := wfClient.ResetWorkflow(ctx, &s.ResetWorkflowExecutionRequest{
+			Domain: &domain,
+			WorkflowExecution: &s.WorkflowExecution{
+				WorkflowId: &wid,
+				RunId:      &resetBaseRunID,
 			},
-			DecisionFinishEventID: decisionFinishID,
-			RequestID:             uuid.New(),
-			Reason:                fmt.Sprintf("%v:%v", getCurrentUserFromEnv(), params.reason),
-			SkipSignalReapply:     params.skipSignalReapply,
+			Reason:                common.StringPtr(fmt.Sprintf("%v:%v", getCurrentUserFromEnv(), params.reason)),
+			DecisionFinishEventId: &decisionFinishID,
+			RequestId:             common.StringPtr(uuid.New()),
+			SkipSignalReapply:     &params.skipSignalReapply,
 		})
+		// }) .ResetWorkflowExecution(ctx, &types.ResetWorkflowExecutionRequest{
+		// 	Domain: domain,
+		// 	WorkflowExecution: &types.WorkflowExecution{
+		// 		WorkflowID: wid,
+		// 		RunID:      resetBaseRunID,
+		// 	},
+		// 	DecisionFinishEventID: decisionFinishID,
+		// 	RequestID:             uuid.New(),
+		// 	Reason:                fmt.Sprintf("%v:%v", getCurrentUserFromEnv(), params.reason),
+		// 	SkipSignalReapply:     params.skipSignalReapply,
+		// })
 
 		if err != nil {
 			return printErrorAndReturn("ResetWorkflowExecution failed", err)
 		}
-		fmt.Println("new runID for wid/rid is ,", wid, rid, resp2.GetRunID())
+		fmt.Println("new runID for wid/rid is ,", wid, rid, resp2.GetRunId())
 	}
 
 	return nil
@@ -1879,7 +1887,7 @@ func getResetEventIDByType(
 	ctx context.Context,
 	c *cli.Context,
 	resetType, domain, wid, rid string,
-	frontendClient frontend.Client,
+	wfClient client.Client,
 ) (resetBaseRunID string, decisionFinishID int64, err error) {
 	// default to the same runID
 	resetBaseRunID = rid
@@ -1887,47 +1895,47 @@ func getResetEventIDByType(
 	fmt.Println("resetType:", resetType)
 	switch resetType {
 	case resetTypeLastDecisionCompleted:
-		decisionFinishID, err = getLastDecisionTaskByType(ctx, domain, wid, rid, frontendClient, types.EventTypeDecisionTaskCompleted)
+		decisionFinishID, err = getLastDecisionTaskByType(ctx, domain, wid, rid, wfClient, s.EventTypeDecisionTaskCompleted)
 		if err != nil {
 			return
 		}
-	case resetTypeLastContinuedAsNew:
-		// this reset type may change the base runID
-		resetBaseRunID, decisionFinishID, err = getLastContinueAsNewID(ctx, domain, wid, rid, frontendClient)
-		if err != nil {
-			return
-		}
+	// case resetTypeLastContinuedAsNew:
+	// 	// this reset type may change the base runID
+	// 	resetBaseRunID, decisionFinishID, err = getLastContinueAsNewID(ctx, domain, wid, rid, frontendClient)
+	// 	if err != nil {
+	// 		return
+	// 	}
 	case resetTypeFirstDecisionCompleted:
-		decisionFinishID, err = getFirstDecisionTaskByType(ctx, domain, wid, rid, frontendClient, types.EventTypeDecisionTaskCompleted)
+		decisionFinishID, err = getFirstDecisionTaskByType(ctx, domain, wid, rid, wfClient, s.EventTypeDecisionTaskCompleted)
 		if err != nil {
 			return
 		}
-	case resetTypeBadBinary:
-		binCheckSum := c.String(FlagResetBadBinaryChecksum)
-		decisionFinishID, err = getBadDecisionCompletedID(ctx, domain, wid, rid, binCheckSum, frontendClient)
-		if err != nil {
-			return
-		}
-	case resetTypeDecisionCompletedTime:
-		earliestTime := parseTime(c.String(FlagEarliestTime), 0)
-		decisionFinishID, err = getEarliestDecisionID(ctx, domain, wid, rid, earliestTime, frontendClient)
-		if err != nil {
-			return
-		}
-	case resetTypeFirstDecisionScheduled:
-		decisionFinishID, err = getFirstDecisionTaskByType(ctx, domain, wid, rid, frontendClient, types.EventTypeDecisionTaskScheduled)
-		if err != nil {
-			return
-		}
-		// decisionFinishID is exclusive in reset API
-		decisionFinishID++
-	case resetTypeLastDecisionScheduled:
-		decisionFinishID, err = getLastDecisionTaskByType(ctx, domain, wid, rid, frontendClient, types.EventTypeDecisionTaskScheduled)
-		if err != nil {
-			return
-		}
-		// decisionFinishID is exclusive in reset API
-		decisionFinishID++
+	// case resetTypeBadBinary:
+	// 	binCheckSum := c.String(FlagResetBadBinaryChecksum)
+	// 	decisionFinishID, err = getBadDecisionCompletedID(ctx, domain, wid, rid, binCheckSum, frontendClient)
+	// 	if err != nil {
+	// 		return
+	// 	}
+	// case resetTypeDecisionCompletedTime:
+	// 	earliestTime := parseTime(c.String(FlagEarliestTime), 0)
+	// 	decisionFinishID, err = getEarliestDecisionID(ctx, domain, wid, rid, earliestTime, frontendClient)
+	// 	if err != nil {
+	// 		return
+	// 	}
+	// case resetTypeFirstDecisionScheduled:
+	// 	decisionFinishID, err = getFirstDecisionTaskByType(ctx, domain, wid, rid, frontendClient, types.EventTypeDecisionTaskScheduled)
+	// 	if err != nil {
+	// 		return
+	// 	}
+	// 	// decisionFinishID is exclusive in reset API
+	// 	decisionFinishID++
+	// case resetTypeLastDecisionScheduled:
+	// 	decisionFinishID, err = getLastDecisionTaskByType(ctx, domain, wid, rid, frontendClient, types.EventTypeDecisionTaskScheduled)
+	// 	if err != nil {
+	// 		return
+	// 	}
+	// 	// decisionFinishID is exclusive in reset API
+	// 	decisionFinishID++
 	default:
 		panic("not supported resetType")
 	}
@@ -1939,39 +1947,24 @@ func getFirstDecisionTaskByType(
 	domain string,
 	workflowID string,
 	runID string,
-	frontendClient frontend.Client,
-	decisionType types.EventType,
+	wfClient client.Client,
+	decisionType s.EventType,
 ) (decisionFinishID int64, err error) {
 
-	req := &types.GetWorkflowExecutionHistoryRequest{
-		Domain: domain,
-		Execution: &types.WorkflowExecution{
-			WorkflowID: workflowID,
-			RunID:      runID,
-		},
-		MaximumPageSize: 1000,
-		NextPageToken:   nil,
-	}
+	iter := wfClient.GetWorkflowHistory(ctx, workflowID, runID, false, s.HistoryEventFilterTypeAllEvent) // GetWorkflowExecutionHistory(ctx, req)
 
-	for {
-		resp, err := frontendClient.GetWorkflowExecutionHistory(ctx, req)
+	for iter.HasNext() {
+		e, err := iter.Next()
 		if err != nil {
 			return 0, printErrorAndReturn("GetWorkflowExecutionHistory failed", err)
 		}
 
-		for _, e := range resp.GetHistory().GetEvents() {
-			if e.GetEventType() == decisionType {
-				decisionFinishID = e.GetEventID()
-				return decisionFinishID, nil
-			}
-		}
-
-		if len(resp.NextPageToken) != 0 {
-			req.NextPageToken = resp.NextPageToken
-		} else {
+		if e.GetEventType() == decisionType {
+			decisionFinishID = e.GetEventId()
 			break
 		}
 	}
+
 	if decisionFinishID == 0 {
 		return 0, printErrorAndReturn("Get DecisionFinishID failed", fmt.Errorf("no DecisionFinishID"))
 	}
@@ -2023,38 +2016,33 @@ func getLastDecisionTaskByType(
 	domain string,
 	workflowID string,
 	runID string,
-	frontendClient frontend.Client,
-	decisionType types.EventType,
+	wfClient client.Client,
+	decisionType s.EventType,
 ) (decisionFinishID int64, err error) {
 
-	req := &types.GetWorkflowExecutionHistoryRequest{
-		Domain: domain,
-		Execution: &types.WorkflowExecution{
-			WorkflowID: workflowID,
-			RunID:      runID,
-		},
-		MaximumPageSize: 1000,
-		NextPageToken:   nil,
-	}
+	// req := &types.GetWorkflowExecutionHistoryRequest{
+	// 	Domain: domain,
+	// 	Execution: &types.WorkflowExecution{
+	// 		WorkflowID: workflowID,
+	// 		RunID:      runID,
+	// 	},
+	// 	MaximumPageSize: 1000,
+	// 	NextPageToken:   nil,
+	// }
 
-	for {
-		resp, err := frontendClient.GetWorkflowExecutionHistory(ctx, req)
+	iter := wfClient.GetWorkflowHistory(ctx, workflowID, runID, false, s.HistoryEventFilterTypeAllEvent) // GetWorkflowExecutionHistory(ctx, req)
+
+	for iter.HasNext() {
+		e, err := iter.Next()
 		if err != nil {
 			return 0, printErrorAndReturn("GetWorkflowExecutionHistory failed", err)
 		}
 
-		for _, e := range resp.GetHistory().GetEvents() {
-			if e.GetEventType() == decisionType {
-				decisionFinishID = e.GetEventID()
-			}
-		}
-
-		if len(resp.NextPageToken) != 0 {
-			req.NextPageToken = resp.NextPageToken
-		} else {
-			break
+		if e.GetEventType() == decisionType {
+			decisionFinishID = e.GetEventId()
 		}
 	}
+
 	if decisionFinishID == 0 {
 		return 0, printErrorAndReturn("Get DecisionFinishID failed", fmt.Errorf("no DecisionFinishID"))
 	}

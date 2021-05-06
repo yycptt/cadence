@@ -41,7 +41,7 @@ import (
 
 const (
 	cadenceClientName      = "cadence-client"
-	cadenceFrontendService = "cadence-frontend"
+	cadenceFrontendService = "cadence-frontend-staging"
 )
 
 // ClientFactory is used to construct rpc clients
