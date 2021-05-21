@@ -1,4 +1,5 @@
 // Copyright (c) 2020 Uber Technologies, Inc.
+// Portions of the Software are attributed to Copyright (c) 2021 Temporal Technologies Inc.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -26,6 +27,7 @@ import (
 	context "context"
 	ctx "context"
 	"fmt"
+	"time"
 
 	"github.com/uber/cadence/common"
 	"github.com/uber/cadence/common/cache"
@@ -217,7 +219,11 @@ func (r *workflowResetterImpl) prepareResetWorkflow(
 		return nil, err
 	}
 
-	if err := r.failInflightActivity(resetMutableState, resetReason); err != nil {
+	if err := r.failInflightActivity(
+		resetMutableState,
+		resetReason,
+		resetMutableState.GetExecutionInfo().StartTimestamp,
+	); err != nil {
 		return nil, err
 	}
 
@@ -379,12 +385,17 @@ func (r *workflowResetterImpl) replayResetWorkflow(
 func (r *workflowResetterImpl) failInflightActivity(
 	mutableState execution.MutableState,
 	terminateReason string,
+	now time.Time,
 ) error {
 
 	for _, ai := range mutableState.GetPendingActivityInfos() {
 		switch ai.StartedID {
 		case common.EmptyEventID:
-			// activity not started, noop
+			// activity not started, override scheduled time to now
+			ai.ScheduledTime = now
+			if err := mutableState.UpdateActivity(ai); err != nil {
+				return err
+			}
 		case common.TransientEventID:
 			// activity is started (with retry policy)
 			// should not encounter this case when rebuilding mutable state

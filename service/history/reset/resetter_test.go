@@ -1,4 +1,5 @@
 // Copyright (c) 2020 Uber Technologies, Inc.
+// Portions of the Software are attributed to Copyright (c) 2021 Temporal Technologies Inc.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -23,6 +24,7 @@ package reset
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/golang/mock/gomock"
 	"github.com/pborman/uuid"
@@ -267,6 +269,7 @@ func (s *workflowResetterSuite) TestReplayResetWorkflow() {
 }
 
 func (s *workflowResetterSuite) TestFailInflightActivity() {
+	now := time.Now().UTC()
 	terminateReason := "some random termination reason"
 
 	mutableState := execution.NewMockMutableState(s.controller)
@@ -279,9 +282,10 @@ func (s *workflowResetterSuite) TestFailInflightActivity() {
 		StartedIdentity: "some random activity 1 started identity",
 	}
 	activity2 := &persistence.ActivityInfo{
-		Version:    12,
-		ScheduleID: 456,
-		StartedID:  common.EmptyEventID,
+		Version:       12,
+		ScheduleID:    456,
+		ScheduledTime: now.Add(-10 * time.Second),
+		StartedID:     common.EmptyEventID,
 	}
 	mutableState.EXPECT().GetPendingActivityInfos().Return(map[int64]*persistence.ActivityInfo{
 		activity1.ScheduleID: activity1,
@@ -297,8 +301,14 @@ func (s *workflowResetterSuite) TestFailInflightActivity() {
 			Identity: activity1.StartedIdentity,
 		},
 	).Return(&types.HistoryEvent{}, nil).Times(1)
+	mutableState.EXPECT().UpdateActivity(&persistence.ActivityInfo{
+		Version:       activity2.Version,
+		ScheduleID:    activity2.ScheduleID,
+		ScheduledTime: now,
+		StartedID:     activity2.StartedID,
+	})
 
-	err := s.workflowResetter.failInflightActivity(mutableState, terminateReason)
+	err := s.workflowResetter.failInflightActivity(mutableState, terminateReason, now)
 	s.NoError(err)
 }
 
